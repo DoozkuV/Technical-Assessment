@@ -82,11 +82,9 @@ Supported effects:
 - `bg_blur`
 
 ## Limitations
-- Batch-only (no real-time streaming).
 - Frame-by-frame processing can be slow for long videos.
 - Output resolution capped at 1280px width for runtime safety.
 
 ## Future Work
-- Streamed frame piping to FFmpeg for faster IO.
 - Persistent job history and cleanup policies.
 - UI for trimming or selecting output resolution.
