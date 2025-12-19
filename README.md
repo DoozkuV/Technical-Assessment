@@ -1,118 +1,92 @@
-# Face Detection Technical Assessment
+# Video Background Effects Pipeline
 
-A full-stack application for implementing face detection on video content, designed as a technical assessment platform.
+Backend-first video processing app that applies background-only effects using MediaPipe selfie segmentation, OpenCV frame processing, and FFmpeg encoding. A React editor UI submits jobs and polls status until the processed result is ready.
 
-## Project Structure
+## Architecture
+- **Frontend**: React + TypeScript editor UI, React Query for API polling
+- **Backend**: Flask API + Redis/RQ job queue
+- **Pipeline**: OpenCV decode → MediaPipe segmentation → NumPy composite → FFmpeg encode
+- **Storage**: `backend/data/jobs/<jobId>/input.*` and `backend/data/jobs/<jobId>/output.mp4`
 
-This repository contains two main components:
+## Backend Setup
 
-### Backend (`/app`)
-- **Technology**: Python Flask/FastAPI
-- **Purpose**: Provides API endpoints for face detection processing
-- **Key Files**:
-  - `main.py` - Main application entry point
-  - `helpers.py` - Utility functions and helpers
-  - `requirements.txt` - Python dependencies
+### Requirements
+- Python 3.10 or 3.11 (MediaPipe does not support Python 3.13)
+- MediaPipe pinned to 0.10.14 for `mediapipe.solutions` support
+- Redis
+- ffmpeg (must be on PATH)
 
-### Frontend (`/frontend`)
-- **Technology**: React with TypeScript
-- **Purpose**: User interface for video playback and face detection visualization
-- **Key Files**:
-  - `src/App.tsx` - Main React component
-  - `src/components/` - Reusable UI components
-  - `src/consts.ts` - Configuration constants (video URL)
+### Install Python dependencies (uv)
+```bash
+uv venv --python 3.11
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+uv lock
+uv sync
+```
 
-## Getting Started
+### Run Redis
+Option 1: Docker
+```bash
+docker run --rm -p 6379:6379 redis:7
+```
 
-### Prerequisites
-- Python 3.8+
-- Node.js 16+
-- npm or yarn
+Option 2: Local install
+```bash
+redis-server
+```
 
-### Backend Setup
+Optional: override Redis URL
+```bash
+export REDIS_URL=redis://localhost:6379/0
+```
 
-1. Navigate to the project root directory
-2. Create and activate a virtual environment:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
+### Start API server
+```bash
+python backend/main.py
+```
 
-3. Install Python dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+### Start RQ worker
+```bash
+python backend/worker.py
+```
 
-4. Start the backend server:
-   ```bash
-   python app/main.py
-   ```
+## Frontend Setup
+```bash
+cd frontend
+npm install
+npm start
+```
 
-The backend will run on `http://127.0.0.1:8080`
+Optional API base URL:
+```bash
+export REACT_APP_API_BASE_URL=http://127.0.0.1:8080
+```
 
-### Frontend Setup
+## API Overview
+- `GET /api/health`
+- `GET /api/effects`
+- `POST /api/jobs` (multipart: `video`, `effect`)
+- `GET /api/jobs/<jobId>`
+- `GET /api/jobs/<jobId>/result`
 
-1. Navigate to the frontend directory:
-   ```bash
-   cd frontend
-   ```
+## Pipeline Details
+1. Decode frames with OpenCV.
+2. Run `mediapipe.solutions.selfie_segmentation.SelfieSegmentation(model_selection=1)`.
+3. Smooth mask, composite foreground with background effect.
+4. Write frames to disk and encode with FFmpeg (H.264 + yuv420p).
 
-2. Install Node.js dependencies:
-   ```bash
-   npm install
-   ```
+Supported effects:
+- `none`
+- `bg_grayscale`
+- `bg_sepia`
+- `bg_blur`
 
-3. Start the React development server:
-   ```bash
-   npm start
-   ```
+## Limitations
+- Batch-only (no real-time streaming).
+- Frame-by-frame processing can be slow for long videos.
+- Output resolution capped at 1280px width for runtime safety.
 
-The frontend will run on `http://localhost:3000`
-
-## API Endpoints
-
-### Backend Routes
-- `GET /hello-world` - Test endpoint to verify backend connectivity
-- Additional endpoints can be added for face detection processing
-
-## Usage
-
-1. Start both the backend and frontend servers
-2. Open your browser to `http://localhost:3000`
-3. The video will be displayed and ready for face detection
-4. Click "Ping Backend" to test the connection between frontend and backend
-5. Implement face detection logic in the backend and connect it to the frontend
-
-## Development Notes
-
-### For Assessment Takers
-- The main task is to implement face detection functionality
-- Backend: Add face detection processing endpoints in `app/main.py`
-- Frontend: Connect to your backend endpoints from `src/App.tsx`
-- The video URL is configured in `frontend/src/consts.ts`
-
-### Project Configuration
-- Video source is configured in `frontend/src/consts.ts`
-- Backend port is set to 8080 by default
-- Frontend development server runs on port 3000
-
-## Technologies Used
-
-- **Backend**: Python, Flask/FastAPI
-- **Frontend**: React, TypeScript, HTML5 Video
-- **Styling**: CSS3 with modern responsive design
-- **Development**: Hot reload for both frontend and backend
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Implement your changes
-4. Test both backend and frontend
-5. Submit a pull request
-
-## License
-
-This project is designed for technical assessment purposes.
-
-You may use any tool you wish but you are responsible for understanding all parts of the implementation.
+## Future Work
+- Streamed frame piping to FFmpeg for faster IO.
+- Persistent job history and cleanup policies.
+- UI for trimming or selecting output resolution.

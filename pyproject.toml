@@ -1,0 +1,24 @@
+[project]
+name = "video-background-effects-pipeline"
+version = "0.1.0"
+description = "Flask + Redis/RQ backend for video background effects with MediaPipe and FFmpeg."
+readme = "README.md"
+requires-python = ">=3.10,<3.12"
+dependencies = [
+  "flask",
+  "flask-cors",
+  "mediapipe==0.10.14",
+  "numpy",
+  "opencv-python",
+  "python-dotenv",
+  "redis",
+  "requests",
+  "rq",
+]
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = []

@@ -1,7 +1,0 @@
-ffmpeg-python
-requests
-python-dotenv
-flask
-flask_cors
-opencv-python
-
