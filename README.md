@@ -24,6 +24,15 @@ uv lock
 uv sync
 ```
 
+## Docker Compose (Recommended)
+```bash
+docker compose up --build
+```
+
+Services:
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:8080
+
 ### Run Redis
 Option 1: Docker
 ```bash

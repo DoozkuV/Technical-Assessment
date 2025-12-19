@@ -1,7 +1,6 @@
 import os
 import shutil
 import subprocess
-from typing import Optional
 
 import cv2
 import mediapipe as mp
@@ -11,8 +10,8 @@ from rq import get_current_job
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data", "jobs")
 MAX_WIDTH = 1280
 
-def _update_job_meta(job, status: Optional[str] = None, progress: Optional[int] = None,
-                     error: Optional[str] = None, result_path: Optional[str] = None) -> None:
+def _update_job_meta(job, status: str | None = None, progress: int | None = None,
+                     error: str | None = None, result_path: str | None = None) -> None:
     if job is None:
         return
     meta = job.meta or {}
