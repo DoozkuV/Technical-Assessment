@@ -12,9 +12,9 @@ const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
         ref={ref}
         src={src}
         className="video-player"
-        controls
         onLoadedMetadata={onLoadedMetadata}
         crossOrigin="anonymous"
+        playsInline
       />
     );
   }

@@ -3,16 +3,29 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import VideoPlayer from './components/VideoPlayer';
 import { apiBaseUrl, videoUrl } from './consts';
 import { createJob, getEffects, getJob } from './api';
+import { usePreviewSegmentation } from './hooks/usePreviewSegmentation';
 
 const App: React.FC = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const previewCanvasRef = useRef<HTMLCanvasElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedEffect, setSelectedEffect] = useState<string>('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [useSample, setUseSample] = useState(false);
   const [localUrl, setLocalUrl] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
-  const [processedUrl, setProcessedUrl] = useState<string | null>(null);
+  const [lastDownloadedJobId, setLastDownloadedJobId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [videoStats, setVideoStats] = useState<{
+    width: number;
+    height: number;
+    duration: number;
+    sizeMb: number | null;
+  } | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [volume, setVolume] = useState(0.8);
 
   const effectsQuery = useQuery({
     queryKey: ['effects'],
@@ -54,7 +67,6 @@ const App: React.FC = () => {
     },
     onSuccess: (data) => {
       setJobId(data.jobId);
-      setProcessedUrl(null);
     },
     onError: (error) => {
       if (error instanceof Error) {
@@ -73,12 +85,45 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (jobQuery.data?.status === 'done' && jobQuery.data.resultUrl) {
-      setProcessedUrl(`${apiBaseUrl}${jobQuery.data.resultUrl}?v=${Date.now()}`);
+      const url = `${apiBaseUrl}${jobQuery.data.resultUrl}?v=${Date.now()}`;
+      if (jobQuery.data.jobId !== lastDownloadedJobId) {
+        window.open(url, '_blank', 'noopener');
+        setLastDownloadedJobId(jobQuery.data.jobId);
+      }
     }
     if (jobQuery.data?.status === 'failed' && jobQuery.data.error) {
       setErrorMessage(jobQuery.data.error);
     }
-  }, [jobQuery.data]);
+  }, [jobQuery.data, lastDownloadedJobId]);
+
+  const previewSrc = useMemo(() => {
+    return localUrl || '';
+  }, [localUrl]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) {
+      return;
+    }
+    const handleTimeUpdate = () => setCurrentTime(video.currentTime);
+    const handlePlay = () => setIsPlaying(true);
+    const handlePause = () => setIsPlaying(false);
+    const handleLoaded = () => {
+      setDuration(video.duration || 0);
+      setCurrentTime(video.currentTime || 0);
+    };
+    video.volume = volume;
+    video.addEventListener('timeupdate', handleTimeUpdate);
+    video.addEventListener('play', handlePlay);
+    video.addEventListener('pause', handlePause);
+    video.addEventListener('loadedmetadata', handleLoaded);
+    return () => {
+      video.removeEventListener('timeupdate', handleTimeUpdate);
+      video.removeEventListener('play', handlePlay);
+      video.removeEventListener('pause', handlePause);
+      video.removeEventListener('loadedmetadata', handleLoaded);
+    };
+  }, [previewSrc, volume]);
 
   useEffect(() => {
     if (!selectedFile) {
@@ -97,9 +142,13 @@ const App: React.FC = () => {
     }
   }, [useSample]);
 
-  const previewSrc = useMemo(() => {
-    return processedUrl || localUrl || '';
-  }, [processedUrl, localUrl]);
+  const previewEnabled = Boolean(previewSrc) && selectedEffect !== 'none';
+  const previewStatus = usePreviewSegmentation({
+    videoRef,
+    canvasRef: previewCanvasRef,
+    effectId: selectedEffect,
+    enabled: previewEnabled,
+  });
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] || null;
@@ -107,16 +156,24 @@ const App: React.FC = () => {
     setUseSample(false);
     setLocalUrl(null);
     setJobId(null);
-    setProcessedUrl(null);
+    setLastDownloadedJobId(null);
     setErrorMessage(null);
+    setVideoStats(null);
+    setIsPlaying(false);
+    setCurrentTime(0);
+    setDuration(0);
   };
 
   const handleUseSample = () => {
     setUseSample(true);
     setSelectedFile(null);
     setJobId(null);
-    setProcessedUrl(null);
+    setLastDownloadedJobId(null);
     setErrorMessage(null);
+    setVideoStats(null);
+    setIsPlaying(false);
+    setCurrentTime(0);
+    setDuration(0);
   };
 
   const isApplyDisabled = createJobMutation.isPending || (!selectedFile && !useSample);
@@ -144,28 +201,114 @@ const App: React.FC = () => {
           <div className="panel-header">
             <h2>Preview</h2>
             <div className="panel-meta">
-              {processedUrl ? 'Processed output' : 'Source video'}
+              Live preview
             </div>
           </div>
           <div className="preview-body">
             {previewSrc ? (
-              <VideoPlayer
-                ref={videoRef}
-                src={previewSrc}
-                onLoadedMetadata={() => console.log('Video loaded')}
-              />
+              <div className="preview-stack">
+                <VideoPlayer
+                  ref={videoRef}
+                  src={previewSrc}
+                  onLoadedMetadata={() => {
+                    const el = videoRef.current;
+                    if (!el) {
+                      return;
+                    }
+                    const sizeMb = selectedFile ? selectedFile.size / (1024 * 1024) : null;
+      setVideoStats({
+        width: el.videoWidth,
+        height: el.videoHeight,
+        duration: el.duration,
+        sizeMb,
+      });
+      setDuration(el.duration || 0);
+    }}
+                />
+                <canvas
+                  ref={previewCanvasRef}
+                  className={`preview-canvas ${previewEnabled ? 'is-active' : ''}`}
+                />
+                <div className="preview-badge">Preview</div>
+              </div>
             ) : (
               <div className="empty-state">
                 <div className="empty-icon">⬤</div>
                 <p>Upload a video to begin</p>
+                <div className="empty-actions">
+                  <button className="primary-button" type="button" onClick={handleUseSample}>
+                    Use provided sample video
+                  </button>
+                  <button
+                    className="ghost-button"
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    Upload a video
+                  </button>
+                </div>
               </div>
             )}
           </div>
-          {processedUrl && (
-            <div className="preview-footer">
-              <a className="link-button" href={processedUrl} download>
-                Download processed video
-              </a>
+          {previewSrc && (
+            <div className="control-bar">
+              <button
+                className="control-button"
+                type="button"
+                onClick={() => {
+                  const video = videoRef.current;
+                  if (!video) {
+                    return;
+                  }
+                  if (video.paused) {
+                    video.play();
+                    setIsPlaying(true);
+                  } else {
+                    video.pause();
+                    setIsPlaying(false);
+                  }
+                }}
+              >
+                {isPlaying ? 'Pause' : 'Play'}
+              </button>
+              <div className="time-range">
+                <input
+                  type="range"
+                  min={0}
+                  max={duration || 0}
+                  step={0.1}
+                  value={currentTime}
+                  onChange={(event) => {
+                    const video = videoRef.current;
+                    if (!video) {
+                      return;
+                    }
+                    const next = Number(event.target.value);
+                    video.currentTime = next;
+                    setCurrentTime(next);
+                  }}
+                />
+              </div>
+              <span className="time-label">
+                {currentTime.toFixed(1)} / {duration.toFixed(1)}s
+              </span>
+              <input
+                className="volume-range"
+                type="range"
+                min={0}
+                max={1}
+                step={0.05}
+                value={volume}
+                onChange={(event) => {
+                  const video = videoRef.current;
+                  if (!video) {
+                    return;
+                  }
+                  const next = Number(event.target.value);
+                  video.volume = next;
+                  setVolume(next);
+                }}
+              />
             </div>
           )}
         </section>
@@ -175,7 +318,12 @@ const App: React.FC = () => {
             <h3>Source</h3>
             <div className="upload-area">
               <label className="upload-input">
-                <input type="file" accept="video/*" onChange={handleFileChange} />
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="video/*"
+                  onChange={handleFileChange}
+                />
                 <span>{selectedFile ? selectedFile.name : 'Choose a video file'}</span>
               </label>
               <button className="ghost-button" type="button" onClick={handleUseSample}>
@@ -205,26 +353,56 @@ const App: React.FC = () => {
                 {!effectsQuery.data && <option>Loading effects...</option>}
               </select>
             </div>
-            <button
-              className="primary-button"
-              type="button"
-              onClick={() => createJobMutation.mutate()}
-              disabled={isApplyDisabled}
-            >
-              {createJobMutation.isPending ? 'Uploading...' : 'Apply Effect'}
-            </button>
+            {videoStats && (
+              <div className="stats-list">
+                <div className="stat-row">
+                  <span>Resolution</span>
+                  <span>
+                    {videoStats.width}×{videoStats.height}
+                  </span>
+                </div>
+                <div className="stat-row">
+                  <span>Duration</span>
+                  <span>{videoStats.duration.toFixed(1)}s</span>
+                </div>
+                <div className="stat-row">
+                  <span>Size</span>
+                  <span>{videoStats.sizeMb ? `${videoStats.sizeMb.toFixed(1)} MB` : '—'}</span>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="panel-card">
             <h3>Status</h3>
-            <div className="status-row">
-              <span className="status-label">Job</span>
-              <span className={`status-value status-${statusLabel}`}>{statusLabel}</span>
-            </div>
-            <div className="progress-track">
-              <div className="progress-fill" style={{ width: `${progress}%` }} />
-            </div>
-            <p className="progress-text">{progress}% complete</p>
+            {(jobQuery.data?.status && jobQuery.data.status !== 'done' && jobQuery.data.status !== 'failed') ||
+            createJobMutation.isPending ? (
+              <>
+                <div className="status-row">
+                  <span className="status-label">Job</span>
+                  <span className={`status-value status-${statusLabel}`}>{statusLabel}</span>
+                </div>
+                <div className="progress-track">
+                  <div className="progress-fill" style={{ width: `${progress}%` }} />
+                </div>
+                <p className="progress-text">{progress}% complete</p>
+                {previewEnabled && !previewStatus.ready && !previewStatus.error && (
+                  <div className="progress-text">Preview loading…</div>
+                )}
+              </>
+            ) : (
+              <button
+                className="primary-button"
+                type="button"
+                onClick={() => createJobMutation.mutate()}
+                disabled={isApplyDisabled}
+              >
+                Export
+              </button>
+            )}
+            {previewEnabled && previewStatus.error && (
+              <div className="error-banner">{previewStatus.error}</div>
+            )}
             {effectsQuery.isError && (
               <div className="error-banner">Unable to load effects list.</div>
             )}
