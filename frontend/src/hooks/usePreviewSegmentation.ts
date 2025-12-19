@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { SelfieSegmentation } from '@mediapipe/selfie_segmentation';
 
 const SEG_BASE_WIDTH = 320;
-const MASK_BLUR_PX = 12;
+const DEFAULT_MASK_BLUR_PX = 12;
 
 type MaskState = {
   canvas: HTMLCanvasElement | null;
@@ -18,6 +18,10 @@ type UsePreviewSegmentationArgs = {
   videoRef: React.RefObject<HTMLVideoElement>;
   canvasRef: React.RefObject<HTMLCanvasElement>;
   effectId: string;
+  effectPreview?: {
+    cssFilter?: string;
+    maskBlurPx?: number;
+  };
   enabled: boolean;
 };
 
@@ -27,6 +31,7 @@ export function usePreviewSegmentation({
   videoRef,
   canvasRef,
   effectId,
+  effectPreview,
   enabled,
 }: UsePreviewSegmentationArgs): SegmentationStatus {
   const segRef = useRef<SelfieSegmentation | null>(null);
@@ -43,14 +48,17 @@ export function usePreviewSegmentation({
   const [status, setStatus] = useState<SegmentationStatus>({ ready: false, error: null });
 
   const filterCss = useMemo(() => {
+    if (effectPreview?.cssFilter) {
+      return effectPreview.cssFilter;
+    }
     const map: Record<string, string> = {
       none: 'none',
       bg_grayscale: 'grayscale(1)',
       bg_sepia: 'sepia(1)',
-      bg_blur: `blur(${MASK_BLUR_PX}px)`,
+      bg_blur: `blur(${DEFAULT_MASK_BLUR_PX}px)`,
     };
     return map[effectId] ?? 'none';
-  }, [effectId]);
+  }, [effectId, effectPreview]);
 
   useEffect(() => {
     let cancelled = false;
@@ -162,7 +170,8 @@ export function usePreviewSegmentation({
 
       if (maskRef.current.canvas) {
         maskFeatherCtx.clearRect(0, 0, w, h);
-        maskFeatherCtx.filter = `blur(${MASK_BLUR_PX}px)`;
+        const maskBlurPx = effectPreview?.maskBlurPx ?? DEFAULT_MASK_BLUR_PX;
+        maskFeatherCtx.filter = `blur(${maskBlurPx}px)`;
         maskFeatherCtx.drawImage(maskRef.current.canvas, 0, 0, w, h);
         maskFeatherCtx.filter = 'none';
 

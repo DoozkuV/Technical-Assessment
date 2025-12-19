@@ -3,6 +3,9 @@ import { apiBaseUrl } from './consts';
 export interface EffectOption {
   id: string;
   label: string;
+  preview?: {
+    cssFilter?: string;
+  };
 }
 
 export interface EffectsResponse {

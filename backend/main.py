@@ -24,10 +24,26 @@ DATA_DIR = os.path.join(os.path.dirname(__file__), "data", "jobs")
 os.makedirs(DATA_DIR, exist_ok=True)
 
 EFFECTS = [
-    {"id": "none", "label": "None"},
-    {"id": "bg_grayscale", "label": "Background Grayscale"},
-    {"id": "bg_sepia", "label": "Background Sepia"},
-    {"id": "bg_blur", "label": "Background Blur"},
+    {
+        "id": "none",
+        "label": "None",
+        "preview": {"cssFilter": "none"},
+    },
+    {
+        "id": "bg_grayscale",
+        "label": "Background Grayscale",
+        "preview": {"cssFilter": "grayscale(1)"},
+    },
+    {
+        "id": "bg_sepia",
+        "label": "Background Sepia",
+        "preview": {"cssFilter": "sepia(1)"},
+    },
+    {
+        "id": "bg_blur",
+        "label": "Background Blur",
+        "preview": {"cssFilter": "blur(18px)"},
+    },
 ]
 
 

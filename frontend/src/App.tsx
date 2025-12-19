@@ -142,11 +142,16 @@ const App: React.FC = () => {
     }
   }, [useSample]);
 
+  const selectedEffectPreview = useMemo(() => {
+    return effectsQuery.data?.effects.find((effect) => effect.id === selectedEffect)?.preview;
+  }, [effectsQuery.data, selectedEffect]);
+
   const previewEnabled = Boolean(previewSrc) && selectedEffect !== 'none';
   const previewStatus = usePreviewSegmentation({
     videoRef,
     canvasRef: previewCanvasRef,
     effectId: selectedEffect,
+    effectPreview: selectedEffectPreview,
     enabled: previewEnabled,
   });
 
